@@ -4,6 +4,9 @@
 
 import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
+import { GDB } from 'gdb-js';
+import { spawn } from 'child_process';
+import * as util from './util';
 
 export interface MockBreakpoint {
 	id: number;
@@ -35,6 +38,8 @@ export class MockRuntime extends EventEmitter {
 	// so that the frontend can match events with breakpoints.
 	private _breakpointId = 1;
 
+	// The gdb-js process handle to access the GDB instance.
+	private _gdb: GDB;
 
 	constructor() {
 		super();
@@ -44,6 +49,11 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public start(program: string, stopOnEntry: boolean) {
+		let child = spawn('gdb', ['-i=mi', 'main'])
+		this._gdb = new GDB(child);
+		util.logProcessOutput(child);
+
+		// let port = await gdb.getDebugServerPort(adapterProcess);
 
 		this.loadSource(program);
 		this._currentLine = -1;

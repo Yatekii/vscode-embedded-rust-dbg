@@ -1,5 +1,4 @@
 import * as cp from 'child_process';
-import * as path from 'path';
 import { Readable } from 'stream';
 import * as util from './util';
 
@@ -23,6 +22,14 @@ export async function getDebugServerPort(adapter: cp.ChildProcess): Promise<numb
     return parseInt(match[1]);
 }
 
+/**
+ * Looks for a specific pattern in a stream and returns the matched contents if it was found.
+ * Kills the process if the `timeout` is reached.
+ * @param process The child process which is expected to emmit a certain pattern.
+ * @param channel The channel stream on which the pattern is expected.
+ * @param pattern A RegExp pattern which the channel has to match.
+ * @param timeoutMillis A timeout after which the child process is killed if the pattern was not found.
+ */
 export function waitForPattern(
     process: cp.ChildProcess,
     channel: Readable,

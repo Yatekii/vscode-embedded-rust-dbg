@@ -1,4 +1,4 @@
-import { QuickPickItem, WorkspaceConfiguration, DebugConfiguration, OutputChannel } from 'vscode';
+import { QuickPickItem, WorkspaceConfiguration, DebugConfiguration } from 'vscode';
 import * as cp from 'child_process';
 import { readdirAsync } from './async';
 import { Dict } from './common';
@@ -157,13 +157,11 @@ function isScalarValue(value: any): boolean {
         typeof value == 'string' || value instanceof String;
 }
 
-export function logProcessOutput(process: cp.ChildProcess, output: OutputChannel) {
+export function logProcessOutput(process: cp.ChildProcess) {
     process.stdout.on('data', chunk => {
-		output.append(chunk.toString());
 		console.log(chunk.toString());
     });
     process.stderr.on('data', chunk => {
-		output.append(chunk.toString());
 		console.log(chunk.toString());
     });
 }

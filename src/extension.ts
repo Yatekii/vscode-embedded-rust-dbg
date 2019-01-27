@@ -6,14 +6,8 @@
 
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
-import { MockDebugSession } from './mockDebug';
+import { EmbeddedDebugSession } from './session';
 import * as Net from 'net';
-import { Dict } from './common';
-import * as util from './util';
-import { ChildProcess } from 'child_process';
-import * as gdb from './gdb';
-
-export let output = vscode.window.createOutputChannel('LLDB');
 
 /*
  * Set the following compile time flag to true if the
@@ -31,11 +25,11 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	// register a configuration provider for 'mock' debug type
-	const provider = new MockConfigurationProvider();
+	const provider = new ConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', provider));
 
 	if (EMBED_DEBUG_ADAPTER) {
-		const factory = new MockDebugAdapterDescriptorFactory();
+		const factory = new DebugAdapterDescriptorFactory();
 		context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mock', factory));
 		context.subscriptions.push(factory);
 	}
@@ -46,64 +40,37 @@ export function deactivate() {
 }
 
 
-class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
+class ConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 	/**
 	 * Massage a debug configuration just before a debug session is being launched,
 	 * e.g. add all missing attributes to the debug configuration.
 	 */
 	async resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): Promise<ProviderResult<DebugConfiguration>> {
-
-		// // if launch.json is missing or empty
-		// if (!config.type && !config.request && !config.name) {
-		// 	const editor = vscode.window.activeTextEditor;
-		// 	if (editor && editor.document.languageId === 'markdown') {
-		// 		config.type = 'mock';
-		// 		config.name = 'Launch';
-		// 		config.request = 'launch';
-		// 		config.program = '${file}';
-		// 		config.stopOnEntry = true;
-		// 	}
-		// }
-
 		if (!config.program) {
 			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
 				return undefined;	// abort launch
 			});
 		}
 
-		let [adapter, port] = await this.startDebugAdapter(folder, {});
-
-		this['adapter'] = adapter
-
 		return config;
-	}
-
-	async startDebugAdapter(
-		folder: WorkspaceFolder | undefined,
-		params: Dict<string>
-	): Promise<[ChildProcess, number]> {
-		let adapterProcess = await gdb.spawnDebugAdapter(
-				'gdb-multiarch',
-				[],
-				{},
-				vscode.workspace.rootPath!);
-		util.logProcessOutput(adapterProcess, output);
-		let port = await gdb.getDebugServerPort(adapterProcess);
-		return [adapterProcess, port];
 	}
 }
 
-class MockDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
+class DebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
 
 	private server?: Net.Server;
 
-	createDebugAdapterDescriptor(session: vscode.DebugSession, executable: vscode.DebugAdapterExecutable | undefined): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-
+	/**
+	 * This function is called when a new session start was requested (Play button, F5).
+	 * @param session_config A configuration object, which holds a lot of information about the session that is requested to be started.
+	 * @param executable An optional executable that can be used instead of a session.
+	 */
+	createDebugAdapterDescriptor(session_config: vscode.DebugSession, executable?: vscode.DebugAdapterExecutable): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
 		if (!this.server) {
 			// start listening on a random port
 			this.server = Net.createServer(socket => {
-				const session = new MockDebugSession();
+				const session = new EmbeddedDebugSession(session_config);
 				session.setRunAsServer(true);
 				session.start(<NodeJS.ReadableStream>socket, socket);
 			}).listen(0);

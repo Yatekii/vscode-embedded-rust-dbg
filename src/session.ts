@@ -11,13 +11,15 @@ import {
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
+import * as vscode from 'vscode';
 const { Subject } = require('await-notify');
 
+export let output = vscode.window.createOutputChannel('LLDB');
 
 /**
- * This interface describes the mock-debug specific launch attributes
+ * This interface describes the debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The schema for these attributes lives in the package.json of the debug extension.
  * The interface should always match this schema.
  */
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
@@ -29,7 +31,7 @@ interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	trace?: boolean;
 }
 
-export class MockDebugSession extends LoggingDebugSession {
+export class EmbeddedDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
@@ -41,12 +43,16 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _configurationDone = new Subject();
 
+	private _config: vscode.DebugSession;
+
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
 	 */
-	public constructor() {
+	public constructor(config: vscode.DebugSession) {
 		super("mock-debug.txt");
+
+		this._config = config;
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
@@ -56,16 +62,16 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('entry', EmbeddedDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('step', EmbeddedDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('breakpoint', EmbeddedDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnException', () => {
-			this.sendEvent(new StoppedEvent('exception', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('exception', EmbeddedDebugSession.THREAD_ID));
 		});
 		this._runtime.on('breakpointValidated', (bp: MockBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
@@ -85,6 +91,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	/**
 	 * The 'initialize' request is the first request called by the frontend
 	 * to interrogate the features the debug adapter provides.
+	 * Called 1st.
 	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 
@@ -108,6 +115,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	/**
 	 * Called at the end of the configuration sequence.
 	 * Indicates that all breakpoints etc. have been sent to the DA and that the 'launch' can start.
+	 * Called 3st.
 	 */
 	protected configurationDoneRequest(response: DebugProtocol.ConfigurationDoneResponse, args: DebugProtocol.ConfigurationDoneArguments): void {
 		super.configurationDoneRequest(response, args);
@@ -118,6 +126,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	/**
 	 * Called as soon as the launch request comes in.
+	 * Called 2st.
 	 */
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
 
@@ -161,7 +170,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports now threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.THREAD_ID, "thread 1")
+				new Thread(EmbeddedDebugSession.THREAD_ID, "thread 1")
 			]
 		};
 		this.sendResponse(response);

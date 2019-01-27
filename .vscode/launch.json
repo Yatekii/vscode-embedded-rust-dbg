@@ -8,7 +8,7 @@
 			"runtimeExecutable": "${execPath}",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/mock_test/"
+				"${workspaceFolder}/../spi-flash/"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
